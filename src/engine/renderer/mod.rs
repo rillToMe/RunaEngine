@@ -1,4 +1,5 @@
 mod camera;
+mod texture;
 
 use std::sync::Arc;
 use winit::{window::Window};
@@ -14,6 +15,7 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
 pub use camera::Camera;
+pub use texture::Texture;
 
 pub struct Renderer {
     instance: Instance,
@@ -33,6 +35,9 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
 
+    texture: Texture,
+    texture_bind_group: wgpu::BindGroup,
+
     camera: Camera,
 
     position: [f32; 2],
@@ -44,7 +49,7 @@ pub struct Renderer {
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct Vertex {
     pub position: [f32; 2],
-    pub color: [f32; 3],
+    pub uv: [f32; 2],
 }
 
 #[repr(C)]
@@ -74,7 +79,7 @@ impl Vertex {
     pub const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
         wgpu::vertex_attr_array![
             0 => Float32x2,
-            1 => Float32x3,
+            1 => Float32x2,
         ];
 
     pub fn layout<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -230,13 +235,99 @@ impl Renderer {
                 },
             );
 
+        let texture_bytes = include_bytes!(
+            "../../../assets/icons.png"
+        );
+
+        let texture = Texture::from_bytes(
+            &device,
+            &queue,
+            texture_bytes,
+            "Test Texture",
+        );
+
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(
+                &wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Runa Texture Bind Group Layout"),
+
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+
+                            visibility:
+                                wgpu::ShaderStages::FRAGMENT,
+
+                            ty: wgpu::BindingType::Texture {
+                                sample_type:
+                                    wgpu::TextureSampleType::Float {
+                                        filterable: true,
+                                    },
+
+                                view_dimension:
+                                    wgpu::TextureViewDimension::D2,
+
+                                multisampled: false,
+                            },
+
+                            count: None,
+                        },
+
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+
+                            visibility:
+                                wgpu::ShaderStages::FRAGMENT,
+
+                            ty: wgpu::BindingType::Sampler(
+                                wgpu::SamplerBindingType::Filtering
+                            ),
+
+                            count: None,
+                        },
+                    ],
+                },
+            );
+
+        let texture_bind_group =
+            device.create_bind_group(
+                &wgpu::BindGroupDescriptor {
+                    label: Some("Runa Texture Bind Group"),
+
+                    layout:
+                        &texture_bind_group_layout,
+
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+
+                            resource:
+                                wgpu::BindingResource::TextureView(
+                                    &texture.view
+                                ),
+                        },
+
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+
+                            resource:
+                                wgpu::BindingResource::Sampler(
+                                    &texture.sampler
+                                ),
+                        },
+                    ],
+                },
+            );
+            
+
         let pipeline_layout =
             device.create_pipeline_layout(
                 &wgpu::PipelineLayoutDescriptor {
                     label: Some("Runa Pipeline Layout"),
 
                     bind_group_layouts: &[
-                        Some(&uniform_bind_group_layout)
+                        Some(&uniform_bind_group_layout),
+                        Some(&texture_bind_group_layout),
                     ],
 
                     immediate_size: 0,
@@ -312,7 +403,7 @@ impl Renderer {
                             format: config.format,
 
                             blend: Some(
-                                wgpu::BlendState::REPLACE
+                                wgpu::BlendState::ALPHA_BLENDING
                             ),
 
                             write_mask:
@@ -328,24 +419,28 @@ impl Renderer {
         );
 
         let vertices = [
+            // Top-left
             Vertex {
                 position: [0.0, 0.0],
-                color: [1.0, 0.0, 0.0],
+                uv: [0.0, 0.0],
             },
 
+            // Top-right
             Vertex {
                 position: [200.0, 0.0],
-                color: [0.0, 1.0, 0.0],
+                uv: [1.0, 0.0],
             },
 
+            // Bottom-right
             Vertex {
                 position: [200.0, 200.0],
-                color: [0.0, 0.0, 1.0],
+                uv: [1.0, 1.0],
             },
 
+            // Bottom-left
             Vertex {
                 position: [0.0, 200.0],
-                color: [1.0, 1.0, 0.0],
+                uv: [0.0, 1.0],
             },
         ];
 
@@ -381,6 +476,7 @@ impl Renderer {
             config.height as f32,
         );
 
+
         let mut renderer = Self {
             instance,
             adapter,
@@ -399,6 +495,9 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
 
+            texture,
+            texture_bind_group,
+
             camera,
 
             position: [0.0, 0.0],
@@ -408,8 +507,8 @@ impl Renderer {
         };
 
         renderer.set_transform(
-            [400., 250.0],
-            0.785398,
+            [500.0, 250.0],
+            0.0,
             [1.0, 1.0],
         );
 
@@ -509,6 +608,12 @@ impl Renderer {
             render_pass.set_bind_group(
                 0,
                 &self.uniform_bind_group,
+                &[],
+            );
+
+            render_pass.set_bind_group(
+                1,
+                &self.texture_bind_group,
                 &[],
             );
 
