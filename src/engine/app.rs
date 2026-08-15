@@ -178,8 +178,9 @@ impl<G: Game> App<G> {
     fn render(&mut self) {
         if let Some(renderer) = &mut self.renderer {
             let sprite = renderer.default_sprite();
+            let test_sprite = renderer.test_sprite();
 
-            // Sprite 1
+            // Texture A
             renderer.draw_sprite(
                 &sprite,
                 &Transform {
@@ -189,9 +190,9 @@ impl<G: Game> App<G> {
                 },
             );
 
-            // Sprite 2
+            // Texture B
             renderer.draw_sprite(
-                &sprite,
+                &test_sprite,
                 &Transform {
                     position: [500.0, 100.0],
                     rotation: 0.0,
@@ -199,12 +200,22 @@ impl<G: Game> App<G> {
                 },
             );
 
-            // Sprite 3
+            // Texture A
             renderer.draw_sprite(
                 &sprite,
                 &Transform {
                     position: [300.0, 400.0],
                     rotation: 0.35,
+                    scale: [0.5, 0.5],
+                },
+            );
+
+            // Texture B
+            renderer.draw_sprite(
+                &test_sprite,
+                &Transform {
+                    position: [700.0, 400.0],
+                    rotation: -0.3,
                     scale: [0.5, 0.5],
                 },
             );

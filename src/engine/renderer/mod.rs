@@ -49,6 +49,7 @@ pub struct Renderer {
 
     texture_manager: TextureManager,
     default_texture: TextureHandle,
+    test_texture: TextureHandle,
 
     camera: Camera,
 
@@ -183,8 +184,31 @@ impl Renderer {
         result
     }
 
+    pub fn sprite(
+        &self,
+        texture: TextureHandle,
+    ) -> Sprite {
+        Sprite::new(texture)
+    }
     pub fn default_sprite(&self) -> Sprite {
         Sprite::new(self.default_texture)
+    }
+
+    pub fn test_sprite(&self) -> Sprite {
+        Sprite::new(self.test_texture)
+    }
+
+    pub fn load_texture(
+        &mut self,
+        bytes: &[u8],
+        label: &str,
+    ) -> TextureHandle {
+        self.texture_manager.load(
+            &self.device,
+            &self.queue,
+            bytes,
+            label,
+        )
     }
 
     pub fn draw_sprite(
@@ -373,6 +397,17 @@ impl Renderer {
             &queue,
             texture_bytes,
             "Icons Texture",
+        );
+
+        let test_texture_bytes = include_bytes!(
+            "../../../assets/alya.jpeg"
+        );
+
+        let test_texture_handle = texture_manager.load(
+            &device,
+            &queue,
+            test_texture_bytes,
+            "Test Texture",
         );
 
         println!(
@@ -583,6 +618,7 @@ impl Renderer {
 
             texture_manager,
             default_texture: texture_handle,
+            test_texture: test_texture_handle,
 
             camera,
 
@@ -644,26 +680,39 @@ impl Renderer {
                     label: Some("Runa Render Encoder"),
                 },
             );
+        self.draw_commands
+            .sort_by_key(|command| command.texture);
 
-        let mut batches: Vec<(TextureHandle, Vec<SpriteInstance>)> =
-            Vec::new();
+        let mut batches: Vec<(
+            TextureHandle,
+            usize,
+            usize,
+        )> = Vec::new();
+
+        let mut all_instances: Vec<SpriteInstance> = Vec::new();
 
         for command in &self.draw_commands {
             let instance =
                 self.create_instance(command.transform);
 
-            if let Some((texture_handle, instances)) =
+            let instance_index =
+                all_instances.len();
+
+            all_instances.push(instance);
+
+            if let Some((texture_handle, start, end)) =
                 batches.last_mut()
             {
                 if *texture_handle == command.texture {
-                    instances.push(instance);
+                    *end += 1;
                     continue;
                 }
             }
 
             batches.push((
                 command.texture,
-                vec![instance],
+                instance_index,
+                instance_index + 1,
             ));
         }
 
@@ -673,18 +722,21 @@ impl Renderer {
             batches.len()
         );
 
-        let total_instances: usize = batches
-            .iter()
-            .map(|(_, instances)| instances.len())
-            .sum();
-
-        if total_instances > self.instance_capacity {
+        if all_instances.len() > self.instance_capacity {
             panic!(
                 "Too many sprites: {} (capacity: {})",
-                total_instances,
+                all_instances.len(),
                 self.instance_capacity
             );
         }
+
+        // Upload SEMUA instance sekaligus.
+        // Jangan upload per batch ke offset 0.
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&all_instances),
+        );
 
         {
             let mut render_pass =
@@ -745,36 +797,26 @@ impl Renderer {
                 wgpu::IndexFormat::Uint16,
             );
 
-            for (texture_handle, instances) in &batches {
-                if instances.is_empty() {
+            for (texture_handle, start, end) in &batches {
+                if start == end {
                     continue;
                 }
 
-                // Upload instance data.
-                self.queue.write_buffer(
-                    &self.instance_buffer,
-                    0,
-                    bytemuck::cast_slice(instances),
-                );
-
-                // Ambil texture yang digunakan batch ini.
                 let texture = self
                     .texture_manager
                     .get(*texture_handle)
                     .expect("texture not found");
 
-                // Bind texture.
                 render_pass.set_bind_group(
                     1,
                     &texture.bind_group,
                     &[],
                 );
 
-                // Draw semua sprite dalam batch.
                 render_pass.draw_indexed(
                     0..self.num_indices,
                     0,
-                    0..instances.len() as u32,
+                    *start as u32..*end as u32,
                 );
             }
         }
