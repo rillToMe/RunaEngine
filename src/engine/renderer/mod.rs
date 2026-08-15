@@ -1,5 +1,7 @@
+mod camera;
+
 use std::sync::Arc;
-use winit::{dpi::Position, window::Window};
+use winit::{window::Window};
 use wgpu::{
     Adapter,
     Device,
@@ -10,6 +12,8 @@ use wgpu::{
 };
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
+
+pub use camera::Camera;
 
 pub struct Renderer {
     instance: Instance,
@@ -28,6 +32,8 @@ pub struct Renderer {
 
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+
+    camera: Camera,
 
     position: [f32; 2],
     rotation: f32,
@@ -97,11 +103,30 @@ impl Renderer {
         let sy = scale[1];
 
         [
-            [cos * sx, -sin * sy, 0.0, 0.0],
-            [sin * sx,  cos * sy, 0.0, 0.0],
+            [cos * sx,  sin * sx, 0.0, 0.0],
+            [-sin * sy, cos * sy, 0.0, 0.0],
             [0.0,       0.0,      1.0, 0.0],
             [position[0], position[1], 0.0, 1.0],
         ]
+    }
+
+    fn multiply_matrix(
+        a: [[f32; 4]; 4],
+        b: [[f32; 4]; 4],
+    ) -> [[f32; 4]; 4] {
+        let mut result = [[0.0; 4]; 4];
+
+        for col in 0..4 {
+            for row in 0..4 {
+                result[col][row] =
+                    a[0][row] * b[col][0]
+                    + a[1][row] * b[col][1]
+                    + a[2][row] * b[col][2]
+                    + a[3][row] * b[col][3];
+            }
+        }
+
+        result
     }
 
     pub fn set_transform(
@@ -114,11 +139,20 @@ impl Renderer {
         self.rotation = rotation;
         self.scale = scale;
 
-        let transform = Self::create_transform_matrix(
+        let model = Self::create_transform_matrix(
             position,
             rotation,
             scale,
         );
+
+        let projection =
+            self.camera.projection_matrix();
+
+        let transform =
+            Self::multiply_matrix(
+                projection,
+                model,
+            );
 
         let uniforms = Uniforms {
             transform,
@@ -294,27 +328,23 @@ impl Renderer {
         );
 
         let vertices = [
-            // Top-left
             Vertex {
-                position: [-0.5, 0.5],
+                position: [0.0, 0.0],
                 color: [1.0, 0.0, 0.0],
             },
 
-            // Top-right
             Vertex {
-                position: [0.5, 0.5],
+                position: [200.0, 0.0],
                 color: [0.0, 1.0, 0.0],
             },
 
-            // Bottom-right
             Vertex {
-                position: [0.5, -0.5],
+                position: [200.0, 200.0],
                 color: [0.0, 0.0, 1.0],
             },
 
-            // Bottom-left
             Vertex {
-                position: [-0.5, -0.5],
+                position: [0.0, 200.0],
                 color: [1.0, 1.0, 0.0],
             },
         ];
@@ -346,6 +376,11 @@ impl Renderer {
 
         let num_indices = indices.len() as u32;
 
+        let camera = Camera::new(
+            config.width as f32,
+            config.height as f32,
+        );
+
         let mut renderer = Self {
             instance,
             adapter,
@@ -364,15 +399,18 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
 
+            camera,
+
             position: [0.0, 0.0],
             rotation: 0.0,
             scale: [1.0, 1.0],
+
         };
 
         renderer.set_transform(
-            [0.0, 0.0],
-            0.5,
-            [0.7, 0.4],
+            [400., 250.0],
+            0.785398,
+            [1.0, 1.0],
         );
 
         renderer
