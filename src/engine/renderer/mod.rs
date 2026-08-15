@@ -1,6 +1,16 @@
 mod camera;
 mod texture;
 mod sprite;
+mod assets;
+
+pub use camera::Camera;
+pub use texture::Texture;
+pub use sprite::{
+    Sprite,
+    TextureHandle,
+};
+
+pub use assets::TextureManager;
 
 use std::sync::Arc;
 use winit::{window::Window};
@@ -15,10 +25,6 @@ use wgpu::{
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 use crate::engine::math::Transform;
-
-pub use camera::Camera;
-pub use texture::Texture;
-pub use sprite::Sprite;
 
 pub struct Renderer {
     instance: Instance,
@@ -38,7 +44,8 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
 
-    texture: Texture,
+    texture_manager: TextureManager,
+    default_texture: TextureHandle,
 
     camera: Camera,
 
@@ -225,6 +232,9 @@ impl Renderer {
             .await
             .expect("failed to create GPU device");
 
+        let mut texture_manager =
+            TextureManager::new(&device);
+
         let config = surface
             .get_default_config(
                 &adapter,
@@ -307,12 +317,16 @@ impl Renderer {
             "../../../assets/icons.png"
         );
 
-        let texture = Texture::from_bytes(
+        let texture_handle = texture_manager.load(
             &device,
             &queue,
-            &texture_bind_group_layout,
             texture_bytes,
-            "Test Texture",
+            "Icons Texture",
+        );
+
+        println!(
+            "Loaded texture: {:?}",
+            texture_handle
         );
 
         let pipeline_layout =
@@ -490,7 +504,8 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
 
-            texture,
+            texture_manager,
+            default_texture: texture_handle,
 
             camera,
 
@@ -607,9 +622,14 @@ impl Renderer {
                 &[],
             );
 
+            let texture = self
+                .texture_manager
+                .get(self.default_texture)
+                .expect("default texture not found");
+
             render_pass.set_bind_group(
                 1,
-                &self.texture.bind_group,
+                &texture.bind_group,
                 &[],
             );
 
