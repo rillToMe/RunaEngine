@@ -11,6 +11,7 @@ use winit::{
 };
 
 use super::{Renderer, Time};
+use crate::engine::math::Transform;
 
 pub trait Game {
     fn fixed_update(&mut self, dt: f32);
@@ -176,6 +177,19 @@ impl<G: Game> ApplicationHandler for App<G> {
 impl<G: Game> App<G> {
     fn render(&mut self) {
         if let Some(renderer) = &mut self.renderer {
+            let sprite = renderer.default_sprite();
+
+            let transform = Transform {
+                position: [100.0, 100.0],
+                rotation: 0.0,
+                scale: [1.0, 1.0],
+            };
+
+            renderer.draw_sprite(
+                &sprite,
+                &transform,
+            );
+
             renderer.render();
         }
 

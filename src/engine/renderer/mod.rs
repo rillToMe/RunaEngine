@@ -44,6 +44,9 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
 
+    instance_buffer: wgpu::Buffer,
+    instance_capacity: usize,
+
     texture_manager: TextureManager,
     default_texture: TextureHandle,
 
@@ -86,6 +89,13 @@ impl Uniforms {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct SpriteInstance {
+    pub transform: [[f32; 4]; 4],
+}
+
+
 impl Vertex {
     pub const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
         wgpu::vertex_attr_array![
@@ -106,13 +116,32 @@ impl Vertex {
 }
 
 pub struct DrawCommand {
-    pub texture: usize,
+    pub texture: TextureHandle,
     pub transform: Transform,
 }
 
-pub struct Frame<'a> {
-    pub encoder: wgpu::CommandEncoder,
-    pub render_pass: wgpu::RenderPass<'a>,
+impl SpriteInstance {
+    pub fn layout<'a>() -> wgpu::VertexBufferLayout<'a> {
+        let attributes = wgpu::vertex_attr_array![
+            2 => Float32x4,
+            3 => Float32x4,
+            4 => Float32x4,
+            5 => Float32x4,
+        ];
+
+        wgpu::VertexBufferLayout {
+            array_stride:
+                std::mem::size_of::<SpriteInstance>()
+                    as wgpu::BufferAddress,
+
+            step_mode:
+                wgpu::VertexStepMode::Instance,
+
+            attributes: Box::leak(
+                Box::new(attributes)
+            ),
+        }
+    }
 }
 
 impl Renderer {
@@ -154,15 +183,20 @@ impl Renderer {
         result
     }
 
+    pub fn default_sprite(&self) -> Sprite {
+        Sprite::new(self.default_texture)
+    }
+
     pub fn draw_sprite(
         &mut self,
-        _sprite: &Sprite,
+        sprite: &Sprite,
         transform: &Transform,
     ) {
-        self.set_transform(
-            transform.position,
-            transform.rotation,
-            transform.scale,
+        self.draw_commands.push(
+            DrawCommand {
+                texture: sprite.texture,
+                transform: *transform,
+            }
         );
     }
 
@@ -200,6 +234,23 @@ impl Renderer {
             0,
             bytemuck::cast_slice(&[uniforms]),
         );
+    }
+
+    fn create_instance(&self, transform: Transform) -> SpriteInstance {
+        let model = Self::create_transform_matrix(
+            transform.position,
+            transform.rotation,
+            transform.scale,
+        );
+
+        let projection = self.camera.projection_matrix();
+
+        SpriteInstance {
+            transform: Self::multiply_matrix(
+                projection,
+                model,
+            ),
+        }
     }
 
     pub async fn new(window: Arc<Window>) -> Self {
@@ -375,6 +426,26 @@ impl Renderer {
                 },
             );
 
+        let instance_capacity = 1000;
+
+        let instance_buffer = device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Runa Sprite Instance Buffer"),
+
+                size: (
+                    instance_capacity
+                        * std::mem::size_of::<SpriteInstance>()
+                ) as u64,
+
+                usage:
+                    wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::COPY_DST,
+
+                mapped_at_creation: false,
+            },
+        );
+
+
         let shader = device.create_shader_module(
             wgpu::include_wgsl!("shader.wgsl")
         );
@@ -392,7 +463,10 @@ impl Renderer {
                     compilation_options:
                         wgpu::PipelineCompilationOptions::default(),
 
-                    buffers: &[Some(Vertex::layout())],
+                    buffers: &[
+                        Some(Vertex::layout()),
+                        Some(SpriteInstance::layout()),
+                    ],
                 },
 
                 primitive: wgpu::PrimitiveState::default(),
@@ -504,6 +578,9 @@ impl Renderer {
             uniform_buffer,
             uniform_bind_group,
 
+            instance_buffer,
+            instance_capacity,
+
             texture_manager,
             default_texture: texture_handle,
 
@@ -517,11 +594,7 @@ impl Renderer {
 
         };
 
-        renderer.set_transform(
-            [500.0, 250.0],
-            0.0,
-            [1.0, 1.0],
-        );
+
 
         renderer
     }
@@ -534,16 +607,8 @@ impl Renderer {
                 output
             }
 
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface.configure(
-                    &self.device,
-                    &self.config,
-                );
-
-                return;
-            }
-
-            wgpu::CurrentSurfaceTexture::Lost => {
+            wgpu::CurrentSurfaceTexture::Outdated
+            | wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface.configure(
                     &self.device,
                     &self.config,
@@ -581,6 +646,32 @@ impl Renderer {
             );
 
         {
+            let instances: Vec<SpriteInstance> = self
+                .draw_commands
+                .iter()
+                .map(|command| {
+                    self.create_instance(command.transform)
+                })
+                .collect();
+
+            let instance_count = instances.len();
+
+            if instance_count > self.instance_capacity {
+                panic!(
+                    "Too many sprites: {} (capacity: {})",
+                    instance_count,
+                    self.instance_capacity
+                );
+            }
+
+            if !instances.is_empty() {
+                self.queue.write_buffer(
+                    &self.instance_buffer,
+                    0,
+                    bytemuck::cast_slice(&instances),
+                );
+            }
+
             let mut render_pass =
                 encoder.begin_render_pass(
                     &wgpu::RenderPassDescriptor {
@@ -638,16 +729,24 @@ impl Renderer {
                 self.vertex_buffer.slice(..),
             );
 
+            render_pass.set_vertex_buffer(
+                1,
+                self.instance_buffer.slice(..),
+            );
+
             render_pass.set_index_buffer(
                 self.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint16,
             );
 
-            render_pass.draw_indexed(
-                0..self.num_indices,
-                0,
-                0..1,
-            );
+            if instance_count > 0 {
+                render_pass.draw_indexed(
+                    0..self.num_indices,
+                    0,
+                    0..instance_count as u32,
+                );
+            }
+
         }
 
         self.queue.submit(
@@ -657,5 +756,8 @@ impl Renderer {
         );
 
         self.queue.present(output);
+
+        // Command sudah diproses.
+        self.draw_commands.clear();
     }
 }
