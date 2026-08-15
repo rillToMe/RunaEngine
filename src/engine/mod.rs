@@ -5,3 +5,4 @@ mod time;
 pub use app::{App, Game};
 pub use renderer::Renderer;
 pub use time::Time;
+pub mod math;

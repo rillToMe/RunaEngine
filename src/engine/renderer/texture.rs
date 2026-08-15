@@ -1,11 +1,9 @@
-use std::num::NonZeroU32;
-
-use image::GenericImageView;
-
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+
+    pub bind_group: wgpu::BindGroup,
 
     pub width: u32,
     pub height: u32,
@@ -15,6 +13,7 @@ impl Texture {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
         bytes: &[u8],
         label: &str,
     ) -> Self {
@@ -37,7 +36,6 @@ impl Texture {
                 size,
 
                 mip_level_count: 1,
-
                 sample_count: 1,
 
                 dimension: wgpu::TextureDimension::D2,
@@ -64,7 +62,6 @@ impl Texture {
 
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-
                 bytes_per_row: Some(4 * dimensions.0),
                 rows_per_image: Some(dimensions.1),
             },
@@ -76,6 +73,7 @@ impl Texture {
             &wgpu::TextureViewDescriptor::default(),
         );
 
+        // Sampler
         let sampler = device.create_sampler(
             &wgpu::SamplerDescriptor {
                 label: Some(label),
@@ -102,10 +100,40 @@ impl Texture {
             },
         );
 
+        // Bind group
+        let bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                label: Some(label),
+
+                layout,
+
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+
+                        resource:
+                            wgpu::BindingResource::TextureView(
+                                &view
+                            ),
+                    },
+
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+
+                        resource:
+                            wgpu::BindingResource::Sampler(
+                                &sampler
+                            ),
+                    },
+                ],
+            },
+        );
+
         Self {
             texture,
             view,
             sampler,
+            bind_group,
 
             width: dimensions.0,
             height: dimensions.1,

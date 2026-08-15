@@ -1,5 +1,6 @@
 mod camera;
 mod texture;
+mod sprite;
 
 use std::sync::Arc;
 use winit::{window::Window};
@@ -13,9 +14,11 @@ use wgpu::{
 };
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
+use crate::engine::math::Transform;
 
 pub use camera::Camera;
 pub use texture::Texture;
+pub use sprite::Sprite;
 
 pub struct Renderer {
     instance: Instance,
@@ -36,13 +39,14 @@ pub struct Renderer {
     uniform_bind_group: wgpu::BindGroup,
 
     texture: Texture,
-    texture_bind_group: wgpu::BindGroup,
 
     camera: Camera,
 
     position: [f32; 2],
     rotation: f32,
     scale: [f32; 2],
+
+    draw_commands: Vec<DrawCommand>,
 }
 
 #[repr(C)]
@@ -94,6 +98,15 @@ impl Vertex {
     }
 }
 
+pub struct DrawCommand {
+    pub texture: usize,
+    pub transform: Transform,
+}
+
+pub struct Frame<'a> {
+    pub encoder: wgpu::CommandEncoder,
+    pub render_pass: wgpu::RenderPass<'a>,
+}
 
 impl Renderer {
     fn create_transform_matrix(
@@ -132,6 +145,18 @@ impl Renderer {
         }
 
         result
+    }
+
+    pub fn draw_sprite(
+        &mut self,
+        _sprite: &Sprite,
+        transform: &Transform,
+    ) {
+        self.set_transform(
+            transform.position,
+            transform.rotation,
+            transform.scale,
+        );
     }
 
     pub fn set_transform(
@@ -235,17 +260,6 @@ impl Renderer {
                 },
             );
 
-        let texture_bytes = include_bytes!(
-            "../../../assets/icons.png"
-        );
-
-        let texture = Texture::from_bytes(
-            &device,
-            &queue,
-            texture_bytes,
-            "Test Texture",
-        );
-
         let texture_bind_group_layout =
             device.create_bind_group_layout(
                 &wgpu::BindGroupLayoutDescriptor {
@@ -289,36 +303,17 @@ impl Renderer {
                 },
             );
 
-        let texture_bind_group =
-            device.create_bind_group(
-                &wgpu::BindGroupDescriptor {
-                    label: Some("Runa Texture Bind Group"),
+        let texture_bytes = include_bytes!(
+            "../../../assets/icons.png"
+        );
 
-                    layout:
-                        &texture_bind_group_layout,
-
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-
-                            resource:
-                                wgpu::BindingResource::TextureView(
-                                    &texture.view
-                                ),
-                        },
-
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-
-                            resource:
-                                wgpu::BindingResource::Sampler(
-                                    &texture.sampler
-                                ),
-                        },
-                    ],
-                },
-            );
-            
+        let texture = Texture::from_bytes(
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+            texture_bytes,
+            "Test Texture",
+        );
 
         let pipeline_layout =
             device.create_pipeline_layout(
@@ -496,13 +491,14 @@ impl Renderer {
             uniform_bind_group,
 
             texture,
-            texture_bind_group,
 
             camera,
 
             position: [0.0, 0.0],
             rotation: 0.0,
             scale: [1.0, 1.0],
+
+            draw_commands: Vec::new(),
 
         };
 
@@ -613,7 +609,7 @@ impl Renderer {
 
             render_pass.set_bind_group(
                 1,
-                &self.texture_bind_group,
+                &self.texture.bind_group,
                 &[],
             );
 
