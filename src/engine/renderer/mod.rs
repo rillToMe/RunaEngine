@@ -21,7 +21,10 @@ pub struct Renderer {
     config: SurfaceConfiguration,
 
     pipeline: wgpu::RenderPipeline,
+
     vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 }
 
 #[repr(C)]
@@ -145,19 +148,28 @@ impl Renderer {
         );
 
         let vertices = [
+            // Top-left
             Vertex {
-                position: [0.0, 0.5],
+                position: [-0.5, 0.5],
                 color: [1.0, 0.0, 0.0],
             },
 
+            // Top-right
             Vertex {
-                position: [-0.5, -0.5],
+                position: [0.5, 0.5],
                 color: [0.0, 1.0, 0.0],
             },
 
+            // Bottom-right
             Vertex {
                 position: [0.5, -0.5],
                 color: [0.0, 0.0, 1.0],
+            },
+
+            // Bottom-left
+            Vertex {
+                position: [-0.5, -0.5],
+                color: [1.0, 1.0, 0.0],
             },
         ];
 
@@ -171,15 +183,37 @@ impl Renderer {
             },
         );
 
+        let indices: &[u16] = &[
+            0, 1, 2,
+            0, 2, 3,
+        ];
+
+        let index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Runa Quad Index Buffer"),
+
+                contents: bytemuck::cast_slice(indices),
+
+                usage: wgpu::BufferUsages::INDEX,
+            },
+        );
+
+        let num_indices = indices.len() as u32;
+
         Self {
             instance,
             adapter,
             device,
             queue,
+
             surface,
             config,
+
             pipeline,
+
             vertex_buffer,
+            index_buffer,
+            num_indices,
         }
     }
 
@@ -278,7 +312,16 @@ impl Renderer {
                 self.vertex_buffer.slice(..),
             );
 
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_index_buffer(
+                self.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
+
+            render_pass.draw_indexed(
+                0..self.num_indices,
+                0,
+                0..1,
+            );
         }
 
         self.queue.submit(
