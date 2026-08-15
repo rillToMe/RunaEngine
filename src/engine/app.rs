@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -18,10 +20,16 @@ pub struct App {
 
     position: f32,
     velocity: f32,
+
+    target_frame_time: Duration,
+    next_frame_time: Instant,
+
 }
 
 impl App {
     pub fn new(title: impl Into<String>, width: u32, height: u32) -> Self {
+        let now = Instant::now();
+
         Self {
             title: title.into(),
             width,
@@ -33,6 +41,9 @@ impl App {
 
             position: 0.0,
             velocity: 100.0,
+
+            target_frame_time: Duration::from_secs_f64(1.0 / 60.0),
+            next_frame_time: now,
         }
     }
 
@@ -83,33 +94,47 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 self.time.update();
 
-                let dt = self.time.delta_seconds();
+                while self.time.consume_fixed_step() {
+                    self.fixed_update();
+                }
 
-                self.update(dt);
                 self.render();
 
                 if self.time.frame_count() % 60 == 0 {
                     println!(
                         "FPS: {:.1} | Delta: {:.4} | Frame: {}",
                         self.time.fps(),
-                        dt,
+                        self.time.delta_seconds(),
                         self.time.frame_count(),
                     );
-                }
-
-                // Request frame berikutnya.
-                if let Some(window) = &self.window {
-                    window.request_redraw();
                 }
             }
 
             _ => {}
         }
     }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+
+        if now >= self.next_frame_time {
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+
+            self.next_frame_time = now + self.target_frame_time;
+        } else {
+            event_loop.set_control_flow(
+                winit::event_loop::ControlFlow::WaitUntil(self.next_frame_time)
+            );
+        }
+    }
 }
 
 impl App {
-    fn update(&mut self, dt: f32) {
+    fn fixed_update(&mut self) {
+        let dt = Time::fixed_delta_seconds();
+
         self.position += self.velocity * dt;
 
         if self.time.frame_count() % 60 == 0 {

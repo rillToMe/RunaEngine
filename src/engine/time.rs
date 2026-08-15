@@ -5,6 +5,8 @@ pub struct Time {
     last_frame: Instant,
 
     delta: Duration,
+    accumulator: Duration,
+
     frame_count: u64,
 }
 
@@ -15,7 +17,10 @@ impl Time {
         Self {
             start_time: now,
             last_frame: now,
+
             delta: Duration::ZERO,
+            accumulator: Duration::ZERO,
+
             frame_count: 0,
         }
     }
@@ -26,6 +31,8 @@ impl Time {
         self.delta = now.duration_since(self.last_frame);
         self.last_frame = now;
 
+        self.accumulator += self.delta;
+
         self.frame_count += 1;
     }
 
@@ -35,6 +42,21 @@ impl Time {
 
     pub fn delta_seconds(&self) -> f32 {
         self.delta.as_secs_f32()
+    }
+
+    pub fn fixed_delta_seconds() -> f32 {
+        1.0 / 60.0
+    }
+
+    pub fn consume_fixed_step(&mut self) -> bool {
+        let fixed_delta = Duration::from_secs_f32(Self::fixed_delta_seconds());
+
+        if self.accumulator >= fixed_delta {
+            self.accumulator -= fixed_delta;
+            true
+        } else {
+            false
+        }
     }
 
     pub fn delta(&self) -> Duration {
