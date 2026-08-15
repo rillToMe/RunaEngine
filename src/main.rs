@@ -31,7 +31,7 @@ impl Game for MyGame {
     }
 
     fn render(&mut self) {
-        // Renderer nanti masuk di Phase 2.
+        // Renderer dikelola oleh App.
     }
 }
 

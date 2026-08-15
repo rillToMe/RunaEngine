@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use winit::{
     application::ApplicationHandler,
@@ -7,7 +10,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use super::Time;
+use super::{Renderer, Time};
 
 pub trait Game {
     fn fixed_update(&mut self, dt: f32);
@@ -22,7 +25,8 @@ pub struct App<G: Game> {
     width: u32,
     height: u32,
 
-    window: Option<Window>,
+    window: Option<Arc<Window>>,
+    renderer: Option<Renderer>,
 
     time: Time,
 
@@ -47,6 +51,7 @@ impl<G: Game> App<G> {
             height,
 
             window: None,
+            renderer: None,
 
             time: Time::new(),
 
@@ -56,6 +61,8 @@ impl<G: Game> App<G> {
             game,
         }
     }
+
+    
 
     pub fn run(mut self) {
         let event_loop =
@@ -82,6 +89,14 @@ impl<G: Game> ApplicationHandler for App<G> {
             )
             .expect("failed to create window");
 
+        let window = Arc::new(window);
+
+        let renderer =
+            pollster::block_on(
+                Renderer::new(window.clone())
+            );
+
+        self.renderer = Some(renderer);
         self.window = Some(window);
     }
 
@@ -122,7 +137,7 @@ impl<G: Game> ApplicationHandler for App<G> {
                 );
 
                 // Rendering.
-                self.game.render();
+                self.render();
 
                 if self.time.frame_count() % 60 == 0 {
                     println!(
@@ -155,5 +170,15 @@ impl<G: Game> ApplicationHandler for App<G> {
                 ),
             );
         }
+    }
+}
+
+impl<G: Game> App<G> {
+    fn render(&mut self) {
+        if let Some(renderer) = &mut self.renderer {
+            renderer.render();
+        }
+
+        self.game.render();
     }
 }
