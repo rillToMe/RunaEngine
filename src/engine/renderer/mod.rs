@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use winit::window::Window;
+use winit::{dpi::Position, window::Window};
 use wgpu::{
     Adapter,
     Device,
@@ -28,6 +28,10 @@ pub struct Renderer {
 
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+
+    position: [f32; 2],
+    rotation: f32,
+    scale: [f32; 2],
 }
 
 #[repr(C)]
@@ -81,6 +85,52 @@ impl Vertex {
 
 
 impl Renderer {
+    fn create_transform_matrix(
+        position: [f32; 2],
+        rotation: f32,
+        scale: [f32; 2],
+    ) -> [[f32; 4]; 4] {
+        let cos = rotation.cos();
+        let sin = rotation.sin();
+
+        let sx = scale[0];
+        let sy = scale[1];
+
+        [
+            [cos * sx, -sin * sy, 0.0, 0.0],
+            [sin * sx,  cos * sy, 0.0, 0.0],
+            [0.0,       0.0,      1.0, 0.0],
+            [position[0], position[1], 0.0, 1.0],
+        ]
+    }
+
+    pub fn set_transform(
+        &mut self,
+        position: [f32; 2],
+        rotation: f32,
+        scale: [f32; 2],
+    ) {
+        self.position = position;
+        self.rotation = rotation;
+        self.scale = scale;
+
+        let transform = Self::create_transform_matrix(
+            position,
+            rotation,
+            scale,
+        );
+
+        let uniforms = Uniforms {
+            transform,
+        };
+
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[uniforms]),
+        );
+    }
+
     pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::default();
 
@@ -296,7 +346,7 @@ impl Renderer {
 
         let num_indices = indices.len() as u32;
 
-        Self {
+        let mut renderer = Self {
             instance,
             adapter,
             device,
@@ -310,9 +360,22 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
+
             uniform_buffer,
             uniform_bind_group,
-        }
+
+            position: [0.0, 0.0],
+            rotation: 0.0,
+            scale: [1.0, 1.0],
+        };
+
+        renderer.set_transform(
+            [0.0, 0.0],
+            0.5,
+            [0.7, 0.4],
+        );
+
+        renderer
     }
 
     pub fn render(&mut self) {
@@ -404,7 +467,7 @@ impl Renderer {
                 );
 
             render_pass.set_pipeline(&self.pipeline);
-            
+
             render_pass.set_bind_group(
                 0,
                 &self.uniform_bind_group,
