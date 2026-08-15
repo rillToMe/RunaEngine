@@ -57,6 +57,10 @@ impl Time {
         } else {
             false
         }
+    }   
+
+    pub fn reset_accumulator(&mut self) {
+        self.accumulator = Duration::ZERO;
     }
 
     pub fn delta(&self) -> Duration {

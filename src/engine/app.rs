@@ -9,7 +9,15 @@ use winit::{
 
 use super::Time;
 
-pub struct App {
+pub trait Game {
+    fn fixed_update(&mut self, dt: f32);
+
+    fn update(&mut self, dt: f32);
+
+    fn render(&mut self);
+}
+
+pub struct App<G: Game> {
     title: String,
     width: u32,
     height: u32,
@@ -18,16 +26,19 @@ pub struct App {
 
     time: Time,
 
-    position: f32,
-    velocity: f32,
-
     target_frame_time: Duration,
     next_frame_time: Instant,
 
+    game: G,
 }
 
-impl App {
-    pub fn new(title: impl Into<String>, width: u32, height: u32) -> Self {
+impl<G: Game> App<G> {
+    pub fn new(
+        title: impl Into<String>,
+        width: u32,
+        height: u32,
+        game: G,
+    ) -> Self {
         let now = Instant::now();
 
         Self {
@@ -39,11 +50,10 @@ impl App {
 
             time: Time::new(),
 
-            position: 0.0,
-            velocity: 100.0,
-
             target_frame_time: Duration::from_secs_f64(1.0 / 60.0),
             next_frame_time: now,
+
+            game,
         }
     }
 
@@ -57,7 +67,7 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl<G: Game> ApplicationHandler for App<G> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = event_loop
             .create_window(
@@ -73,11 +83,6 @@ impl ApplicationHandler for App {
             .expect("failed to create window");
 
         self.window = Some(window);
-
-        // Mulai meminta redraw.
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
     }
 
     fn window_event(
@@ -94,11 +99,30 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 self.time.update();
 
-                while self.time.consume_fixed_step() {
-                    self.fixed_update();
+                const MAX_FIXED_STEPS: u32 = 5;
+
+                let mut fixed_steps = 0;
+
+                while self.time.consume_fixed_step()
+                    && fixed_steps < MAX_FIXED_STEPS
+                {
+                    self.game
+                        .fixed_update(Time::fixed_delta_seconds());
+
+                    fixed_steps += 1;
                 }
 
-                self.render();
+                if fixed_steps == MAX_FIXED_STEPS {
+                    self.time.reset_accumulator();
+                }
+
+                // Variable timestep update.
+                self.game.update(
+                    self.time.delta_seconds()
+                );
+
+                // Rendering.
+                self.game.render();
 
                 if self.time.frame_count() % 60 == 0 {
                     println!(
@@ -122,27 +146,14 @@ impl ApplicationHandler for App {
                 window.request_redraw();
             }
 
-            self.next_frame_time = now + self.target_frame_time;
+            self.next_frame_time =
+                now + self.target_frame_time;
         } else {
             event_loop.set_control_flow(
-                winit::event_loop::ControlFlow::WaitUntil(self.next_frame_time)
+                winit::event_loop::ControlFlow::WaitUntil(
+                    self.next_frame_time,
+                ),
             );
         }
-    }
-}
-
-impl App {
-    fn fixed_update(&mut self) {
-        let dt = Time::fixed_delta_seconds();
-
-        self.position += self.velocity * dt;
-
-        if self.time.frame_count() % 60 == 0 {
-            println!("Position: {:.2}", self.position);
-        }
-    }
-
-    fn render(&mut self) {
-        // Renderer akan masuk Phase 2.
     }
 }
