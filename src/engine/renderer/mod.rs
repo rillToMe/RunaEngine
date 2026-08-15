@@ -19,6 +19,7 @@ pub struct Renderer {
 
     surface: Surface<'static>,
     config: SurfaceConfiguration,
+    pipeline: wgpu::RenderPipeline,
 }
 
 impl Renderer {
@@ -62,6 +63,56 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let shader = device.create_shader_module(
+            wgpu::include_wgsl!("shader.wgsl")
+        );
+
+        let pipeline = device.create_render_pipeline(
+            &wgpu::RenderPipelineDescriptor {
+                label: Some("Runa Render Pipeline"),
+
+                layout: None,
+
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    compilation_options:
+                        wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[],
+                },
+
+                primitive: wgpu::PrimitiveState::default(),
+
+                depth_stencil: None,
+
+                multisample: wgpu::MultisampleState::default(),
+
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    compilation_options:
+                        wgpu::PipelineCompilationOptions::default(),
+
+                    targets: &[Some(
+                        wgpu::ColorTargetState {
+                            format: config.format,
+
+                            blend: Some(
+                                wgpu::BlendState::REPLACE
+                            ),
+
+                            write_mask:
+                                wgpu::ColorWrites::ALL,
+                        }
+                    )],
+                }),
+
+                multiview_mask: None,
+
+                cache: None,
+            },
+        );
+
         Self {
             instance,
             adapter,
@@ -69,6 +120,7 @@ impl Renderer {
             queue,
             surface,
             config,
+            pipeline,
         }
     }
 
@@ -127,7 +179,7 @@ impl Renderer {
             );
 
         {
-            let _render_pass =
+            let mut render_pass =
                 encoder.begin_render_pass(
                     &wgpu::RenderPassDescriptor {
                         label: Some("Runa Render Pass"),
@@ -159,6 +211,10 @@ impl Renderer {
                         multiview_mask: None,
                     },
                 );
+
+            render_pass.set_pipeline(&self.pipeline);
+
+            render_pass.draw(0..3, 0..1);
         }
 
         self.queue.submit(
