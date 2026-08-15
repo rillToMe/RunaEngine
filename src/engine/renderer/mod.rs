@@ -645,33 +645,48 @@ impl Renderer {
                 },
             );
 
+        let mut batches: Vec<(TextureHandle, Vec<SpriteInstance>)> =
+            Vec::new();
+
+        for command in &self.draw_commands {
+            let instance =
+                self.create_instance(command.transform);
+
+            if let Some((texture_handle, instances)) =
+                batches.last_mut()
+            {
+                if *texture_handle == command.texture {
+                    instances.push(instance);
+                    continue;
+                }
+            }
+
+            batches.push((
+                command.texture,
+                vec![instance],
+            ));
+        }
+
+        println!(
+            "Rendering {} sprites in {} texture batches",
+            self.draw_commands.len(),
+            batches.len()
+        );
+
+        let total_instances: usize = batches
+            .iter()
+            .map(|(_, instances)| instances.len())
+            .sum();
+
+        if total_instances > self.instance_capacity {
+            panic!(
+                "Too many sprites: {} (capacity: {})",
+                total_instances,
+                self.instance_capacity
+            );
+        }
+
         {
-            let instances: Vec<SpriteInstance> = self
-                .draw_commands
-                .iter()
-                .map(|command| {
-                    self.create_instance(command.transform)
-                })
-                .collect();
-
-            let instance_count = instances.len();
-
-            if instance_count > self.instance_capacity {
-                panic!(
-                    "Too many sprites: {} (capacity: {})",
-                    instance_count,
-                    self.instance_capacity
-                );
-            }
-
-            if !instances.is_empty() {
-                self.queue.write_buffer(
-                    &self.instance_buffer,
-                    0,
-                    bytemuck::cast_slice(&instances),
-                );
-            }
-
             let mut render_pass =
                 encoder.begin_render_pass(
                     &wgpu::RenderPassDescriptor {
@@ -707,23 +722,14 @@ impl Renderer {
 
             render_pass.set_pipeline(&self.pipeline);
 
+            // Uniform / camera
             render_pass.set_bind_group(
                 0,
                 &self.uniform_bind_group,
                 &[],
             );
 
-            let texture = self
-                .texture_manager
-                .get(self.default_texture)
-                .expect("default texture not found");
-
-            render_pass.set_bind_group(
-                1,
-                &texture.bind_group,
-                &[],
-            );
-
+            // Geometry
             render_pass.set_vertex_buffer(
                 0,
                 self.vertex_buffer.slice(..),
@@ -739,14 +745,38 @@ impl Renderer {
                 wgpu::IndexFormat::Uint16,
             );
 
-            if instance_count > 0 {
+            for (texture_handle, instances) in &batches {
+                if instances.is_empty() {
+                    continue;
+                }
+
+                // Upload instance data.
+                self.queue.write_buffer(
+                    &self.instance_buffer,
+                    0,
+                    bytemuck::cast_slice(instances),
+                );
+
+                // Ambil texture yang digunakan batch ini.
+                let texture = self
+                    .texture_manager
+                    .get(*texture_handle)
+                    .expect("texture not found");
+
+                // Bind texture.
+                render_pass.set_bind_group(
+                    1,
+                    &texture.bind_group,
+                    &[],
+                );
+
+                // Draw semua sprite dalam batch.
                 render_pass.draw_indexed(
                     0..self.num_indices,
                     0,
-                    0..instance_count as u32,
+                    0..instances.len() as u32,
                 );
             }
-
         }
 
         self.queue.submit(
@@ -757,7 +787,7 @@ impl Renderer {
 
         self.queue.present(output);
 
-        // Command sudah diproses.
+        // Semua draw command sudah diproses.
         self.draw_commands.clear();
     }
 }

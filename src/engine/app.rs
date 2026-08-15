@@ -179,15 +179,34 @@ impl<G: Game> App<G> {
         if let Some(renderer) = &mut self.renderer {
             let sprite = renderer.default_sprite();
 
-            let transform = Transform {
-                position: [100.0, 100.0],
-                rotation: 0.0,
-                scale: [1.0, 1.0],
-            };
-
+            // Sprite 1
             renderer.draw_sprite(
                 &sprite,
-                &transform,
+                &Transform {
+                    position: [100.0, 100.0],
+                    rotation: 0.0,
+                    scale: [1.0, 1.0],
+                },
+            );
+
+            // Sprite 2
+            renderer.draw_sprite(
+                &sprite,
+                &Transform {
+                    position: [500.0, 100.0],
+                    rotation: 0.0,
+                    scale: [0.75, 0.75],
+                },
+            );
+
+            // Sprite 3
+            renderer.draw_sprite(
+                &sprite,
+                &Transform {
+                    position: [300.0, 400.0],
+                    rotation: 0.35,
+                    scale: [0.5, 0.5],
+                },
             );
 
             renderer.render();
