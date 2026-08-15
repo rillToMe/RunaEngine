@@ -25,6 +25,9 @@ pub struct Renderer {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+
+    uniform_buffer: wgpu::Buffer,
+    uniform_bind_group: wgpu::BindGroup,
 }
 
 #[repr(C)]
@@ -32,6 +35,29 @@ pub struct Renderer {
 pub struct Vertex {
     pub position: [f32; 2],
     pub color: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct Uniforms {
+    pub transform: [[f32; 4]; 4],
+}
+
+impl Uniforms {
+    pub fn new() -> Self {
+        Self {
+            transform: Self::identity(),
+        }
+    }
+
+    fn identity() -> [[f32; 4]; 4] {
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    }
 }
 
 impl Vertex {
@@ -95,6 +121,76 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(
+                &wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Runa Uniform Bind Group Layout"),
+
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+
+                            visibility: wgpu::ShaderStages::VERTEX,
+
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+
+                                has_dynamic_offset: false,
+
+                                min_binding_size: None,
+                            },
+
+                            count: None,
+                        },
+                    ],
+                },
+            );
+
+        let pipeline_layout =
+            device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("Runa Pipeline Layout"),
+
+                    bind_group_layouts: &[
+                        Some(&uniform_bind_group_layout)
+                    ],
+
+                    immediate_size: 0,
+                },
+            );
+        
+        let uniforms = Uniforms::new();
+
+        let uniform_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Runa Transform Uniform Buffer"),
+
+                contents: bytemuck::cast_slice(&[uniforms]),
+
+                usage:
+                    wgpu::BufferUsages::UNIFORM
+                    | wgpu::BufferUsages::COPY_DST,
+            },
+        );
+
+        let uniform_bind_group =
+            device.create_bind_group(
+                &wgpu::BindGroupDescriptor {
+                    label: Some("Runa Uniform Bind Group"),
+
+                    layout: &uniform_bind_group_layout,
+
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+
+                            resource:
+                                uniform_buffer.as_entire_binding(),
+                        },
+                    ],
+                },
+            );
+
         let shader = device.create_shader_module(
             wgpu::include_wgsl!("shader.wgsl")
         );
@@ -103,7 +199,7 @@ impl Renderer {
             &wgpu::RenderPipelineDescriptor {
                 label: Some("Runa Render Pipeline"),
 
-                layout: None,
+                layout: Some(&pipeline_layout),
 
                 vertex: wgpu::VertexState {
                     module: &shader,
@@ -214,6 +310,8 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             num_indices,
+            uniform_buffer,
+            uniform_bind_group,
         }
     }
 
@@ -306,6 +404,12 @@ impl Renderer {
                 );
 
             render_pass.set_pipeline(&self.pipeline);
+            
+            render_pass.set_bind_group(
+                0,
+                &self.uniform_bind_group,
+                &[],
+            );
 
             render_pass.set_vertex_buffer(
                 0,
