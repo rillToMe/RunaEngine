@@ -5,9 +5,10 @@ use std::{
 
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
+    keyboard::{KeyCode, PhysicalKey},
 };
 
 use super::{Renderer, Time};
@@ -34,7 +35,17 @@ pub struct App<G: Game> {
     target_frame_time: Duration,
     next_frame_time: Instant,
 
+
+    camera_position: [f32; 2],
+    camera_speed: f32,
+
+    move_up: bool,
+    move_down: bool,
+    move_left: bool,
+    move_right: bool,
+
     game: G,
+
 }
 
 impl<G: Game> App<G> {
@@ -58,6 +69,15 @@ impl<G: Game> App<G> {
 
             target_frame_time: Duration::from_secs_f64(1.0 / 60.0),
             next_frame_time: now,
+
+            camera_position: [100.0, 250.0],
+            camera_speed: 300.0,
+
+            move_up: false,
+            move_down: false,
+            move_left: false,
+            move_right: false,
+
 
             game,
         }
@@ -112,6 +132,38 @@ impl<G: Game> ApplicationHandler for App<G> {
                 event_loop.exit();
             }
 
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => {
+                let pressed = state == ElementState::Pressed;
+
+                match key {
+                    KeyCode::KeyW | KeyCode::ArrowUp => {
+                        self.move_up = pressed;
+                    }
+
+                    KeyCode::KeyS | KeyCode::ArrowDown => {
+                        self.move_down = pressed;
+                    }
+
+                    KeyCode::KeyA | KeyCode::ArrowLeft => {
+                        self.move_left = pressed;
+                    }
+
+                    KeyCode::KeyD | KeyCode::ArrowRight => {
+                        self.move_right = pressed;
+                    }
+
+                    _ => {}
+                }
+            }
+
             WindowEvent::RedrawRequested => {
                 self.time.update();
 
@@ -136,6 +188,25 @@ impl<G: Game> ApplicationHandler for App<G> {
                 self.game.update(
                     self.time.delta_seconds()
                 );
+
+                // Camera movement.
+                let dt = self.time.delta_seconds();
+
+                if self.move_up {
+                    self.camera_position[1] -= self.camera_speed * dt;
+                }
+
+                if self.move_down {
+                    self.camera_position[1] += self.camera_speed * dt;
+                }
+
+                if self.move_left {
+                    self.camera_position[0] -= self.camera_speed * dt;
+                }
+
+                if self.move_right {
+                    self.camera_position[0] += self.camera_speed * dt;
+                }
 
                 // Rendering.
                 self.render();
@@ -177,6 +248,7 @@ impl<G: Game> ApplicationHandler for App<G> {
 impl<G: Game> App<G> {
     fn render(&mut self) {
         if let Some(renderer) = &mut self.renderer {
+            renderer.set_camera_position(self.camera_position);
             let sprite = renderer.default_sprite();
             let test_sprite = renderer.test_sprite();
 

@@ -211,6 +211,32 @@ impl Renderer {
         )
     }
 
+    pub fn set_camera_position(
+        &mut self,
+        position: [f32; 2],
+    ) {
+        self.camera.set_position(position);
+    }
+
+    pub fn camera_position(&self) -> [f32; 2] {
+        self.camera.position()
+    }
+
+    pub fn set_camera_rotation(
+        &mut self,
+        rotation: f32,
+    ) {
+        self.camera.set_rotation(rotation);
+    }
+
+    pub fn set_camera_zoom(
+        &mut self,
+        zoom: f32,
+    ) {
+        self.camera.set_zoom(zoom);
+    }
+
+
     pub fn draw_sprite(
         &mut self,
         sprite: &Sprite,
@@ -241,7 +267,8 @@ impl Renderer {
         );
 
         let projection =
-            self.camera.projection_matrix();
+            self.camera.projection_matrix()
+                .to_cols_array_2d();
 
         let transform =
             Self::multiply_matrix(
@@ -267,13 +294,30 @@ impl Renderer {
             transform.scale,
         );
 
-        let projection = self.camera.projection_matrix();
+        let view =
+            self.camera
+                .view_matrix()
+                .to_cols_array_2d();
+
+        let projection =
+            self.camera
+                .projection_matrix()
+                .to_cols_array_2d();
+
+        let view_model =
+            Self::multiply_matrix(
+                view,
+                model,
+            );
+
+        let transform =
+            Self::multiply_matrix(
+                projection,
+                view_model,
+            );
 
         SpriteInstance {
-            transform: Self::multiply_matrix(
-                projection,
-                model,
-            ),
+            transform,
         }
     }
 
@@ -700,7 +744,7 @@ impl Renderer {
 
             all_instances.push(instance);
 
-            if let Some((texture_handle, start, end)) =
+            if let Some((texture_handle, _start, end)) =
                 batches.last_mut()
             {
                 if *texture_handle == command.texture {

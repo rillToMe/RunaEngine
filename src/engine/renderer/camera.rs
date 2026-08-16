@@ -1,6 +1,10 @@
-#[derive(Debug, Clone, Copy)]
+use glam::{Mat4, Vec2};
+
 pub struct Camera {
-    pub position: [f32; 2],
+    pub position: Vec2,
+    pub rotation: f32,
+    pub zoom: f32,
+
     pub width: f32,
     pub height: f32,
 }
@@ -8,47 +12,69 @@ pub struct Camera {
 impl Camera {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            position: [0.0, 0.0],
+            position: Vec2::ZERO,
+            rotation: 0.0,
+            zoom: 1.0,
             width,
             height,
         }
     }
 
-    pub fn projection_matrix(&self) -> [[f32; 4]; 4] {
-        let left = self.position[0];
-        let right = left + self.width;
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::from_scale_rotation_translation(
+            Vec2::splat(self.zoom).extend(1.0),
+            glam::Quat::from_rotation_z(-self.rotation),
+            (-self.position).extend(1.0),
+        )
+    }
 
-        let top = self.position[1];
-        let bottom = top + self.height;
+    pub fn projection_matrix(&self) -> Mat4 {
+        let half_width =
+            self.width * 0.5 / self.zoom;
 
-        [
-            [
-                2.0 / (right - left),
-                0.0,
-                0.0,
-                0.0,
-            ],
+        let half_height =
+            self.height * 0.5 / self.zoom;
 
-            [
-                0.0,
-                2.0 / (top - bottom),
-                0.0,
-                0.0,
-            ],
+        Mat4::orthographic_rh(
+            -half_width,
+            half_width,
+            -half_height,
+            half_height,
+            -100.0,
+            100.0,
+        )
+    }
 
-            [
-                0.0,
-                0.0,
-                -1.0,
-                0.0,
-            ],
+    pub fn view_projection_matrix(&self) -> Mat4 {
+        self.projection_matrix() *
+            self.view_matrix()
+    }
 
-            [
-                -(right + left) / (right - left),
-                -(top + bottom) / (top - bottom),
-                0.0,
-                1.0,
-            ],
-        ]
+    pub fn set_position(
+        &mut self,
+        position: [f32; 2],
+    ) {
+        self.position = position.into();
+    }
+
+    pub fn position(&self) -> [f32; 2] {
+        self.position.into()
+    }
+
+    pub fn set_rotation(&mut self, rotation: f32) {
+        self.rotation = rotation;
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.max(0.01);
+    }
+
+    pub fn resize(
+        &mut self,
+        width: f32,
+        height: f32,
+    ) {
+        self.width = width;
+        self.height = height;
     }
 }
