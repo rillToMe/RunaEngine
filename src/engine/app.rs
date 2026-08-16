@@ -157,7 +157,6 @@ impl<G: Game> ApplicationHandler for App<G> {
                 rotation: 0.0,
                 scale: [1.0, 1.0],
             },
-            Velocity::zero(),
         );
 
         scene.spawn(
@@ -167,7 +166,6 @@ impl<G: Game> ApplicationHandler for App<G> {
                 rotation: 0.0,
                 scale: [1.0, 1.0],
             },
-            Velocity::zero(),
         );
 
         scene.spawn(
@@ -177,7 +175,6 @@ impl<G: Game> ApplicationHandler for App<G> {
                 rotation: 0.0,
                 scale: [0.75, 0.75],
             },
-            Velocity::zero(),
         );
 
         scene.spawn(
@@ -187,7 +184,6 @@ impl<G: Game> ApplicationHandler for App<G> {
                 rotation: 0.35,
                 scale: [0.5, 0.5],
             },
-            Velocity::zero(),
         );
 
         scene.spawn(
@@ -197,9 +193,12 @@ impl<G: Game> ApplicationHandler for App<G> {
                 rotation: -0.3,
                 scale: [0.5, 0.5],
             },
-            Velocity::zero(),
         );
         
+        scene.set_velocity(
+            player,
+            Velocity::zero(),
+        );
 
         self.renderer = Some(renderer);
         self.scene = Some(scene);
@@ -300,24 +299,29 @@ impl<G: Game> ApplicationHandler for App<G> {
                 let dt = self.time.delta_seconds();
 
                 if let Some(player) = self.player {
-                if let Some(scene) = &mut self.scene {
-                    if let Some(entity) = scene.get_mut(player) {
-                        entity.velocity.x = 0.0;
+                    if let Some(scene) = &mut self.scene {
+                        if let Some(entity) = scene.get_mut(player) {
+                            if let Some(velocity) =
+                                entity.velocity.as_mut()
+                            {
+                                velocity.x = 0.0;
 
-                        if self.input.is_action_down(
-                            Action::MoveRight
-                        ) {
-                            entity.velocity.x = 100.0;
-                        }
+                                if self.input.is_action_down(
+                                    Action::MoveRight
+                                ) {
+                                    velocity.x = 100.0;
+                                }
 
-                        if self.input.is_action_down(
-                            Action::MoveLeft
-                        ) {
-                            entity.velocity.x = -100.0;
+                                if self.input.is_action_down(
+                                    Action::MoveLeft
+                                ) {
+                                    velocity.x = -100.0;
+                                }
+                            }
                         }
                     }
                 }
-            }
+            
 
                 if let Some(scene) = &mut self.scene {
                     scene.update(

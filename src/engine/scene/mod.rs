@@ -37,7 +37,7 @@ pub struct Entity {
     pub id: EntityId,
     pub sprite: Sprite,
     pub transform: Transform,
-    pub velocity: Velocity,
+    pub velocity: Option<Velocity>,
     pub visible: bool,
 }
 
@@ -58,7 +58,6 @@ impl Scene {
         &mut self,
         sprite: Sprite,
         transform: Transform,
-        velocity: Velocity,
     ) -> EntityId {
         let id = self.next_id;
 
@@ -69,7 +68,7 @@ impl Scene {
                 id,
                 sprite,
                 transform,
-                velocity,
+                velocity: None,
                 visible: true,
             }
         );
@@ -107,6 +106,25 @@ impl Scene {
         &mut self.entities
     }
 
+    
+    pub fn set_velocity(
+        &mut self,
+        id: EntityId,
+        velocity: Velocity,
+    ) {
+        if let Some(entity) = self.get_mut(id) {
+            entity.velocity = Some(velocity);
+        }
+    }
+
+    pub fn velocity(
+        &self,
+        id: EntityId,
+    ) -> Option<Velocity> {
+        self.get(id)
+            .and_then(|entity| entity.velocity)
+    }
+
     pub fn despawn(
         &mut self,
         id: EntityId,
@@ -121,11 +139,13 @@ impl Scene {
         dt: f32,
     ) {
         for entity in &mut self.entities {
-            entity.transform.position[0] +=
-                entity.velocity.x * dt;
+            if let Some(velocity) = entity.velocity {
+                entity.transform.position[0] +=
+                    velocity.x * dt;
 
-            entity.transform.position[1] +=
-                entity.velocity.y * dt;
+                entity.transform.position[1] +=
+                    velocity.y * dt;
+            }
         }
     }
 
