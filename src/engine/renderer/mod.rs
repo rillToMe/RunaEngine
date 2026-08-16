@@ -218,6 +218,10 @@ impl Renderer {
         self.camera.set_position(position);
     }
 
+    pub fn update_camera(&mut self, dt: f32) {
+        self.camera.update(dt);
+    }
+
     pub fn camera_position(&self) -> [f32; 2] {
         self.camera.position()
     }
@@ -760,11 +764,11 @@ impl Renderer {
             ));
         }
 
-        println!(
-            "Rendering {} sprites in {} texture batches",
-            self.draw_commands.len(),
-            batches.len()
-        );
+        // println!(
+        //     "Rendering {} sprites in {} texture batches",
+        //     self.draw_commands.len(),
+        //     batches.len()
+        // );
 
         if all_instances.len() > self.instance_capacity {
             panic!(

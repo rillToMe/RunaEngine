@@ -11,15 +11,25 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-use super::{Renderer, Time};
+use super::{Renderer, Time, input::Input};
 use crate::engine::math::Transform;
 
 pub trait Game {
-    fn fixed_update(&mut self, dt: f32);
+    fn fixed_update(
+        &mut self,
+        dt: f32,
+        input: &Input,
+    );
 
-    fn update(&mut self, dt: f32);
+    fn update(
+        &mut self,
+        dt: f32,
+        input: &Input,
+    );
 
-    fn render(&mut self);
+    fn render(
+        &mut self,
+    );
 }
 
 pub struct App<G: Game> {
@@ -31,6 +41,7 @@ pub struct App<G: Game> {
     renderer: Option<Renderer>,
 
     time: Time,
+    input: Input,
 
     target_frame_time: Duration,
     next_frame_time: Instant,
@@ -39,17 +50,9 @@ pub struct App<G: Game> {
     camera_position: [f32; 2],
     camera_speed: f32,
 
-    move_up: bool,
-    move_down: bool,
-    move_left: bool,
-    move_right: bool,
-
     camera_zoom: f32,
-    zoom_in: bool,
-    zoom_out: bool,
 
-    middle_mouse: bool,
-    last_mouse_position: Option<[f32; 2]>,
+    camera_rotation: f32,
 
     game: G,
 
@@ -73,6 +76,7 @@ impl<G: Game> App<G> {
             renderer: None,
 
             time: Time::new(),
+            input: Input::new(),
 
             target_frame_time: Duration::from_secs_f64(1.0 / 60.0),
             next_frame_time: now,
@@ -80,18 +84,9 @@ impl<G: Game> App<G> {
             camera_position: [100.0, 250.0],
             camera_speed: 300.0,
 
-            move_up: false,
-            move_down: false,
-            move_left: false,
-            move_right: false,
-
             camera_zoom: 1.0,
 
-            zoom_in: false,
-            zoom_out: false,
-
-            middle_mouse: false,
-            last_mouse_position: None,
+            camera_rotation: 0.0,
 
             game,
         }
@@ -155,35 +150,10 @@ impl<G: Game> ApplicationHandler for App<G> {
                     },
                 ..
             } => {
-                let pressed = state == ElementState::Pressed;
-
-                match key {
-                    KeyCode::KeyW | KeyCode::ArrowUp => {
-                        self.move_up = pressed;
-                    }
-
-                    KeyCode::KeyS | KeyCode::ArrowDown => {
-                        self.move_down = pressed;
-                    }
-
-                    KeyCode::KeyA | KeyCode::ArrowLeft => {
-                        self.move_left = pressed;
-                    }
-
-                    KeyCode::KeyD | KeyCode::ArrowRight => {
-                        self.move_right = pressed;
-                    }
-
-                    KeyCode::KeyQ => {
-                        self.zoom_out = pressed;
-                    }
-
-                    KeyCode::KeyE => {
-                        self.zoom_in = pressed;
-                    }
-
-                    _ => {}
-                }
+                self.input.update_key(
+                    key,
+                    state,
+                );
             }
 
             WindowEvent::MouseWheel { delta, .. } => {
@@ -203,45 +173,23 @@ impl<G: Game> ApplicationHandler for App<G> {
 
             WindowEvent::MouseInput {
                 state,
-                button: MouseButton::Middle,
+                button,
                 ..
             } => {
-                self.middle_mouse =
-                    state == ElementState::Pressed;
-
-                if !self.middle_mouse {
-                    self.last_mouse_position = None;
-                }
+                self.input.update_mouse_button(
+                    button,
+                    state,
+                );
             }
 
             WindowEvent::CursorMoved {
                 position,
                 ..
             } => {
-                let current = [
+                self.input.set_mouse_position([
                     position.x as f32,
                     position.y as f32,
-                ];
-
-                if self.middle_mouse {
-                    if let Some(previous) =
-                        self.last_mouse_position
-                    {
-                        let dx = current[0] - previous[0];
-                        let dy = current[1] - previous[1];
-
-                        let pan_speed =
-                            1.0 / self.camera_zoom;
-
-                        self.camera_position[0] -=
-                            dx * pan_speed;
-
-                        self.camera_position[1] -=
-                            dy * pan_speed;
-                    }
-                }
-
-                self.last_mouse_position = Some(current);
+                ]);
             }
 
             WindowEvent::RedrawRequested => {
@@ -254,8 +202,10 @@ impl<G: Game> ApplicationHandler for App<G> {
                 while self.time.consume_fixed_step()
                     && fixed_steps < MAX_FIXED_STEPS
                 {
-                    self.game
-                        .fixed_update(Time::fixed_delta_seconds());
+                    self.game.fixed_update(
+                        Time::fixed_delta_seconds(),
+                        &self.input,
+                    );
 
                     fixed_steps += 1;
                 }
@@ -266,42 +216,98 @@ impl<G: Game> ApplicationHandler for App<G> {
 
                 // Variable timestep update.
                 self.game.update(
-                    self.time.delta_seconds()
+                    self.time.delta_seconds(),
+                    &self.input,
                 );
 
                 // Camera movement.
                 let dt = self.time.delta_seconds();
 
-                if self.move_up {
-                    self.camera_position[1] -= self.camera_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyW)
+                    || self.input.is_key_down(KeyCode::ArrowUp)
+                {
+                    self.camera_position[1] -=
+                        self.camera_speed * dt;
                 }
 
-                if self.move_down {
-                    self.camera_position[1] += self.camera_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyS)
+                    || self.input.is_key_down(KeyCode::ArrowDown)
+                {
+                    self.camera_position[1] +=
+                        self.camera_speed * dt;
                 }
 
-                if self.move_left {
-                    self.camera_position[0] -= self.camera_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyA)
+                    || self.input.is_key_down(KeyCode::ArrowLeft)
+                {
+                    self.camera_position[0] -=
+                        self.camera_speed * dt;
                 }
 
-                if self.move_right {
-                    self.camera_position[0] += self.camera_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyD)
+                    || self.input.is_key_down(KeyCode::ArrowRight)
+                {
+                    self.camera_position[0] +=
+                        self.camera_speed * dt;
                 }
 
                 let zoom_speed = 1.0;
 
-                if self.zoom_in {
-                    self.camera_zoom += zoom_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyE) {
+                    self.camera_zoom +=
+                        zoom_speed * dt;
                 }
 
-                if self.zoom_out {
-                    self.camera_zoom -= zoom_speed * dt;
+                if self.input.is_key_down(KeyCode::KeyQ) {
+                    self.camera_zoom -=
+                        zoom_speed * dt;
                 }
 
                 self.camera_zoom = self.camera_zoom.clamp(0.25, 4.0);
 
+                let rotation_speed = 2.0;
+
+                if self.input.is_key_down(KeyCode::KeyZ) {
+                    self.camera_rotation -=
+                        rotation_speed * dt;
+                }
+
+                if self.input.is_key_down(KeyCode::KeyX) {
+                    self.camera_rotation +=
+                        rotation_speed * dt;
+                }
+
+                if self.input.is_mouse_button_down(
+                    MouseButton::Middle
+                ) {
+                    let [dx, dy] =
+                        self.input.mouse_delta();
+
+                    let pan_speed =
+                        1.0 / self.camera_zoom;
+
+                    self.camera_position[0] -=
+                        dx * pan_speed;
+
+                    self.camera_position[1] -=
+                        dy * pan_speed;
+                }
+
+                if let Some(renderer) = &mut self.renderer {
+                    renderer.set_camera_position(
+                        self.camera_position
+                    );
+
+                    renderer.set_camera_rotation(
+                        self.camera_rotation
+                    );
+
+                    renderer.update_camera(dt);
+                }
+
                 // Rendering.
                 self.render();
+                self.input.end_frame();
 
                 if self.time.frame_count() % 60 == 0 {
                     println!(
@@ -340,7 +346,6 @@ impl<G: Game> ApplicationHandler for App<G> {
 impl<G: Game> App<G> {
     fn render(&mut self) {
         if let Some(renderer) = &mut self.renderer {
-            renderer.set_camera_position(self.camera_position);
             renderer.set_camera_zoom(self.camera_zoom);
 
             let sprite = renderer.default_sprite();
