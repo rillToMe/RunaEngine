@@ -44,6 +44,10 @@ pub struct App<G: Game> {
     move_left: bool,
     move_right: bool,
 
+    camera_zoom: f32,
+    zoom_in: bool,
+    zoom_out: bool,
+
     game: G,
 
 }
@@ -77,6 +81,11 @@ impl<G: Game> App<G> {
             move_down: false,
             move_left: false,
             move_right: false,
+
+            camera_zoom: 1.0,
+
+            zoom_in: false,
+            zoom_out: false,
 
 
             game,
@@ -160,6 +169,14 @@ impl<G: Game> ApplicationHandler for App<G> {
                         self.move_right = pressed;
                     }
 
+                    KeyCode::KeyQ => {
+                        self.zoom_out = pressed;
+                    }
+
+                    KeyCode::KeyE => {
+                        self.zoom_in = pressed;
+                    }
+
                     _ => {}
                 }
             }
@@ -208,6 +225,18 @@ impl<G: Game> ApplicationHandler for App<G> {
                     self.camera_position[0] += self.camera_speed * dt;
                 }
 
+                let zoom_speed = 1.0;
+
+                if self.zoom_in {
+                    self.camera_zoom += zoom_speed * dt;
+                }
+
+                if self.zoom_out {
+                    self.camera_zoom -= zoom_speed * dt;
+                }
+
+                self.camera_zoom = self.camera_zoom.clamp(0.25, 4.0);
+
                 // Rendering.
                 self.render();
 
@@ -249,6 +278,8 @@ impl<G: Game> App<G> {
     fn render(&mut self) {
         if let Some(renderer) = &mut self.renderer {
             renderer.set_camera_position(self.camera_position);
+            renderer.set_camera_zoom(self.camera_zoom);
+
             let sprite = renderer.default_sprite();
             let test_sprite = renderer.test_sprite();
 

@@ -29,11 +29,8 @@ impl Camera {
     }
 
     pub fn projection_matrix(&self) -> Mat4 {
-        let half_width =
-            self.width * 0.5 / self.zoom;
-
-        let half_height =
-            self.height * 0.5 / self.zoom;
+        let half_width = self.width * 0.5;
+        let half_height = self.height * 0.5;
 
         Mat4::orthographic_rh(
             -half_width,
