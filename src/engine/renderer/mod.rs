@@ -7,10 +7,10 @@ pub use camera::Camera;
 pub use texture::Texture;
 pub use sprite::{
     Sprite,
-    TextureHandle,
+    TextureHandle
 };
 
-pub use assets::TextureManager;
+pub use assets::AssetManager;
 
 use std::sync::Arc;
 use winit::{window::Window};
@@ -47,7 +47,7 @@ pub struct Renderer {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
 
-    texture_manager: TextureManager,
+    assets: AssetManager,
     default_texture: TextureHandle,
     test_texture: TextureHandle,
 
@@ -200,14 +200,12 @@ impl Renderer {
 
     pub fn load_texture(
         &mut self,
-        bytes: &[u8],
-        label: &str,
+        path: &str,
     ) -> TextureHandle {
-        self.texture_manager.load(
+        self.assets.load_texture(
             &self.device,
             &self.queue,
-            bytes,
-            label,
+            path,
         )
     }
 
@@ -355,8 +353,8 @@ impl Renderer {
             .await
             .expect("failed to create GPU device");
 
-        let mut texture_manager =
-            TextureManager::new(&device);
+        let mut assets =
+            AssetManager::new(&device);
 
         let config = surface
             .get_default_config(
@@ -436,26 +434,16 @@ impl Renderer {
                 },
             );
 
-        let texture_bytes = include_bytes!(
-            "../../../assets/icons.png"
-        );
-
-        let texture_handle = texture_manager.load(
+        let texture_handle = assets.load_texture(
             &device,
             &queue,
-            texture_bytes,
-            "Icons Texture",
+            "assets/icons.png",
         );
 
-        let test_texture_bytes = include_bytes!(
-            "../../../assets/alya.jpeg"
-        );
-
-        let test_texture_handle = texture_manager.load(
+        let test_texture_handle = assets.load_texture(
             &device,
             &queue,
-            test_texture_bytes,
-            "Test Texture",
+            "assets/alya.jpeg",
         );
 
         println!(
@@ -664,7 +652,7 @@ impl Renderer {
             instance_buffer,
             instance_capacity,
 
-            texture_manager,
+            assets,
             default_texture: texture_handle,
             test_texture: test_texture_handle,
 
@@ -851,8 +839,8 @@ impl Renderer {
                 }
 
                 let texture = self
-                    .texture_manager
-                    .get(*texture_handle)
+                     .assets
+                    .get_texture(*texture_handle)
                     .expect("texture not found");
 
                 render_pass.set_bind_group(

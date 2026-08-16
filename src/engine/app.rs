@@ -11,7 +11,15 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
-use super::{Renderer, Time, input::Input};
+use super::{
+    Renderer,
+    Time,
+    input::{
+        Input,
+        Action,
+        Binding,
+    },
+};
 use crate::engine::math::Transform;
 
 pub trait Game {
@@ -67,6 +75,13 @@ impl<G: Game> App<G> {
     ) -> Self {
         let now = Instant::now();
 
+        let mut input = Input::new();
+
+        input.set_action_binding(
+            Action::Jump,
+            Binding::Key(KeyCode::KeyJ),
+        );
+
         Self {
             title: title.into(),
             width,
@@ -76,7 +91,6 @@ impl<G: Game> App<G> {
             renderer: None,
 
             time: Time::new(),
-            input: Input::new(),
 
             target_frame_time: Duration::from_secs_f64(1.0 / 60.0),
             next_frame_time: now,
@@ -89,6 +103,8 @@ impl<G: Game> App<G> {
             camera_rotation: 0.0,
 
             game,
+
+            input,
         }
     }
 
@@ -223,62 +239,51 @@ impl<G: Game> ApplicationHandler for App<G> {
                 // Camera movement.
                 let dt = self.time.delta_seconds();
 
-                if self.input.is_key_down(KeyCode::KeyW)
-                    || self.input.is_key_down(KeyCode::ArrowUp)
-                {
+                if self.input.is_action_down(Action::MoveUp) {
                     self.camera_position[1] -=
                         self.camera_speed * dt;
                 }
 
-                if self.input.is_key_down(KeyCode::KeyS)
-                    || self.input.is_key_down(KeyCode::ArrowDown)
-                {
+                if self.input.is_action_down(Action::MoveDown) {
                     self.camera_position[1] +=
                         self.camera_speed * dt;
                 }
 
-                if self.input.is_key_down(KeyCode::KeyA)
-                    || self.input.is_key_down(KeyCode::ArrowLeft)
-                {
+                if self.input.is_action_down(Action::MoveLeft) {
                     self.camera_position[0] -=
                         self.camera_speed * dt;
                 }
 
-                if self.input.is_key_down(KeyCode::KeyD)
-                    || self.input.is_key_down(KeyCode::ArrowRight)
-                {
+                if self.input.is_action_down(Action::MoveRight) {
                     self.camera_position[0] +=
                         self.camera_speed * dt;
-                }
-
+}
                 let zoom_speed = 1.0;
 
-                if self.input.is_key_down(KeyCode::KeyE) {
-                    self.camera_zoom +=
-                        zoom_speed * dt;
+                if self.input.is_action_down(Action::ZoomIn) {
+                    self.camera_zoom += zoom_speed * dt;
                 }
 
-                if self.input.is_key_down(KeyCode::KeyQ) {
-                    self.camera_zoom -=
-                        zoom_speed * dt;
+                if self.input.is_action_down(Action::ZoomOut) {
+                    self.camera_zoom -= zoom_speed * dt;
                 }
 
                 self.camera_zoom = self.camera_zoom.clamp(0.25, 4.0);
 
                 let rotation_speed = 2.0;
 
-                if self.input.is_key_down(KeyCode::KeyZ) {
+                if self.input.is_action_down(Action::RotateLeft) {
                     self.camera_rotation -=
                         rotation_speed * dt;
                 }
 
-                if self.input.is_key_down(KeyCode::KeyX) {
+                if self.input.is_action_down(Action::RotateRight) {
                     self.camera_rotation +=
                         rotation_speed * dt;
                 }
 
-                if self.input.is_mouse_button_down(
-                    MouseButton::Middle
+                if self.input.is_action_down(
+                    Action::PanCamera
                 ) {
                     let [dx, dy] =
                         self.input.mouse_delta();

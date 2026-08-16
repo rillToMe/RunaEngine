@@ -1,20 +1,17 @@
+pub mod action;
+
+pub use action::{
+    Action,
+    ActionMap,
+    Binding,
+};
+
 use std::collections::HashSet;
 
 use winit::{
     event::{ElementState, MouseButton},
     keyboard::KeyCode,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Action {
-    MoveUp,
-    MoveDown,
-    MoveLeft,
-    MoveRight,
-    Jump,
-    Interact,
-    Attack,
-}
 
 pub struct Input {
     keys_down: HashSet<KeyCode>,
@@ -28,6 +25,8 @@ pub struct Input {
     mouse_position: [f32; 2],
     mouse_delta: [f32; 2],
     last_mouse_position: [f32; 2],
+
+    action_map: ActionMap,
 }
 
 impl Input {
@@ -45,6 +44,8 @@ impl Input {
 
             mouse_delta: [0.0, 0.0],
             last_mouse_position: [0.0, 0.0],
+
+            action_map: ActionMap::new(),
         }
     }
 
@@ -52,121 +53,82 @@ impl Input {
         &self,
         action: Action,
     ) -> bool {
-        match action {
-            Action::MoveUp => {
-                self.is_key_down(KeyCode::KeyW)
-                    || self.is_key_down(KeyCode::ArrowUp)
-            }
+        self.action_map
+            .bindings(action)
+            .iter()
+            .any(|binding| {
+                match binding {
+                    Binding::Key(key) => {
+                        self.is_key_down(*key)
+                    }
 
-            Action::MoveDown => {
-                self.is_key_down(KeyCode::KeyS)
-                    || self.is_key_down(KeyCode::ArrowDown)
-            }
-
-            Action::MoveLeft => {
-                self.is_key_down(KeyCode::KeyA)
-                    || self.is_key_down(KeyCode::ArrowLeft)
-            }
-
-            Action::MoveRight => {
-                self.is_key_down(KeyCode::KeyD)
-                    || self.is_key_down(KeyCode::ArrowRight)
-            }
-
-            Action::Jump => {
-                self.is_key_down(KeyCode::Space)
-            }
-
-            Action::Interact => {
-                self.is_key_down(KeyCode::KeyE)
-            }
-
-            Action::Attack => {
-                self.is_mouse_button_down(MouseButton::Left)
-            }
-        }
+                    Binding::Mouse(button) => {
+                        self.is_mouse_button_down(*button)
+                    }
+                }
+            })
     }
 
     pub fn is_action_pressed(
         &self,
         action: Action,
     ) -> bool {
-        match action {
-            Action::MoveUp => {
-                self.is_key_pressed(KeyCode::KeyW)
-                    || self.is_key_pressed(KeyCode::ArrowUp)
-            }
+        self.action_map
+            .bindings(action)
+            .iter()
+            .any(|binding| {
+                match binding {
+                    Binding::Key(key) => {
+                        self.is_key_pressed(*key)
+                    }
 
-            Action::MoveDown => {
-                self.is_key_pressed(KeyCode::KeyS)
-                    || self.is_key_pressed(KeyCode::ArrowDown)
-            }
-
-            Action::MoveLeft => {
-                self.is_key_pressed(KeyCode::KeyA)
-                    || self.is_key_pressed(KeyCode::ArrowLeft)
-            }
-
-            Action::MoveRight => {
-                self.is_key_pressed(KeyCode::KeyD)
-                    || self.is_key_pressed(KeyCode::ArrowRight)
-            }
-
-            Action::Jump => {
-                self.is_key_pressed(KeyCode::Space)
-            }
-
-            Action::Interact => {
-                self.is_key_pressed(KeyCode::KeyE)
-            }
-
-            Action::Attack => {
-                self.is_mouse_button_pressed(
-                    MouseButton::Left
-                )
-            }
-        }
+                    Binding::Mouse(button) => {
+                        self.is_mouse_button_pressed(*button)
+                    }
+                }
+            })
     }
 
     pub fn is_action_released(
         &self,
         action: Action,
     ) -> bool {
-        match action {
-            Action::MoveUp => {
-                self.is_key_released(KeyCode::KeyW)
-                    || self.is_key_released(KeyCode::ArrowUp)
-            }
+        self.action_map
+            .bindings(action)
+            .iter()
+            .any(|binding| {
+                match binding {
+                    Binding::Key(key) => {
+                        self.is_key_released(*key)
+                    }
 
-            Action::MoveDown => {
-                self.is_key_released(KeyCode::KeyS)
-                    || self.is_key_released(KeyCode::ArrowDown)
-            }
+                    Binding::Mouse(button) => {
+                        self.is_mouse_button_released(*button)
+                    }
+                }
+            })
+    }
 
-            Action::MoveLeft => {
-                self.is_key_released(KeyCode::KeyA)
-                    || self.is_key_released(KeyCode::ArrowLeft)
-            }
+    pub fn set_action_bindings(
+        &mut self,
+        action: Action,
+        bindings: Vec<Binding>,
+    ) {
+        self.action_map.set_bindings(
+            action,
+            bindings,
+        );
+    }
 
-            Action::MoveRight => {
-                self.is_key_released(KeyCode::KeyD)
-                    || self.is_key_released(KeyCode::ArrowRight)
-            }
-
-            Action::Jump => {
-                self.is_key_released(KeyCode::Space)
-            }
-
-            Action::Interact => {
-                self.is_key_released(KeyCode::KeyE)
-            }
-
-            Action::Attack => {
-                self.is_mouse_button_released(
-                    MouseButton::Left
-                )
-            }
-        }
+    pub fn set_action_binding(
+        &mut self,
+        action: Action,
+        binding: Binding,
+    ) {
+        self.action_map.set_binding(
+            action,
+            binding,
+        );
     }
 
 

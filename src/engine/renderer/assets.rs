@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 
 use super::{Texture, TextureHandle};
 
@@ -97,5 +98,92 @@ impl TextureManager {
         handle: TextureHandle,
     ) -> Option<&Texture> {
         self.textures.get(&handle)
+    }
+
+    pub fn contains(
+        &self,
+        handle: TextureHandle,
+    ) -> bool {
+        self.textures.contains_key(&handle)
+    }
+}
+
+pub struct AssetManager {
+    textures: TextureManager,
+    texture_cache: HashMap<String, TextureHandle>,
+}
+
+impl AssetManager {
+    pub fn new(
+        device: &wgpu::Device,
+    ) -> Self {
+        Self {
+            textures: TextureManager::new(device),
+            texture_cache: HashMap::new(),
+        }
+    }
+
+    pub fn load_texture(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        path: &str,
+    ) -> TextureHandle {
+        if let Some(&handle) =
+            self.texture_cache.get(path)
+        {
+            return handle;
+        }
+
+        let bytes = fs::read(path)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Failed to load asset '{}': {}",
+                    path,
+                    error
+                )
+            });
+
+        self.load_texture_cached(
+            device,
+            queue,
+            &bytes,
+            path,
+        )
+    }
+
+    pub fn load_texture_cached(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: &[u8],
+        path: &str,
+    ) -> TextureHandle {
+        if let Some(&handle) =
+            self.texture_cache.get(path)
+        {
+            return handle;
+        }
+
+        let handle = self.textures.load(
+            device,
+            queue,
+            bytes,
+            path,
+        );
+
+        self.texture_cache.insert(
+            path.to_string(),
+            handle,
+        );
+
+        handle
+    }
+
+    pub fn get_texture(
+        &self,
+        handle: TextureHandle,
+    ) -> Option<&Texture> {
+        self.textures.get(handle)
     }
 }
