@@ -5,7 +5,7 @@ use std::{
 
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, KeyEvent, WindowEvent},
+    event::{ElementState, KeyEvent, WindowEvent, MouseScrollDelta, MouseButton},
     event_loop::{ActiveEventLoop, EventLoop},
     window::{Window, WindowId},
     keyboard::{KeyCode, PhysicalKey},
@@ -48,6 +48,9 @@ pub struct App<G: Game> {
     zoom_in: bool,
     zoom_out: bool,
 
+    middle_mouse: bool,
+    last_mouse_position: Option<[f32; 2]>,
+
     game: G,
 
 }
@@ -87,6 +90,8 @@ impl<G: Game> App<G> {
             zoom_in: false,
             zoom_out: false,
 
+            middle_mouse: false,
+            last_mouse_position: None,
 
             game,
         }
@@ -179,6 +184,64 @@ impl<G: Game> ApplicationHandler for App<G> {
 
                     _ => {}
                 }
+            }
+
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+
+                    MouseScrollDelta::PixelDelta(position) => {
+                        position.y as f32 / 50.0
+                    }
+                };
+
+                self.camera_zoom += scroll * 0.1;
+
+                self.camera_zoom =
+                    self.camera_zoom.clamp(0.25, 4.0);
+            }
+
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Middle,
+                ..
+            } => {
+                self.middle_mouse =
+                    state == ElementState::Pressed;
+
+                if !self.middle_mouse {
+                    self.last_mouse_position = None;
+                }
+            }
+
+            WindowEvent::CursorMoved {
+                position,
+                ..
+            } => {
+                let current = [
+                    position.x as f32,
+                    position.y as f32,
+                ];
+
+                if self.middle_mouse {
+                    if let Some(previous) =
+                        self.last_mouse_position
+                    {
+                        let dx = current[0] - previous[0];
+                        let dy = current[1] - previous[1];
+
+                        let pan_speed =
+                            1.0 / self.camera_zoom;
+
+                        self.camera_position[0] -=
+                            dx * pan_speed;
+
+                        self.camera_position[1] -=
+                            dy * pan_speed;
+                    }
+                }
+
+                self.last_mouse_position = Some(current);
             }
 
             WindowEvent::RedrawRequested => {
