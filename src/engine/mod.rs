@@ -7,3 +7,4 @@ pub use renderer::Renderer;
 pub use time::Time;
 pub mod math;
 pub mod input;
+pub mod scene;

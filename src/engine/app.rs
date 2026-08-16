@@ -14,11 +14,8 @@ use winit::{
 use super::{
     Renderer,
     Time,
-    input::{
-        Input,
-        Action,
-        Binding,
-    },
+    input::{Input, Action,Binding,},
+    scene::{Scene, EntityId, Velocity},
 };
 use crate::engine::math::Transform;
 
@@ -47,6 +44,9 @@ pub struct App<G: Game> {
 
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
+
+    scene: Option<Scene>,
+    player: Option<EntityId>,
 
     time: Time,
     input: Input,
@@ -89,6 +89,9 @@ impl<G: Game> App<G> {
 
             window: None,
             renderer: None,
+
+            scene: None,
+            player: None,
 
             time: Time::new(),
 
@@ -142,7 +145,65 @@ impl<G: Game> ApplicationHandler for App<G> {
                 Renderer::new(window.clone())
             );
 
+        let mut scene = Scene::new();
+
+        let sprite = renderer.default_sprite();
+        let test_sprite = renderer.test_sprite();
+        
+        let player = scene.spawn(
+            sprite,
+            Transform {
+                position: [100.0, 100.0],
+                rotation: 0.0,
+                scale: [1.0, 1.0],
+            },
+            Velocity::zero(),
+        );
+
+        scene.spawn(
+            sprite,
+            Transform {
+                position: [250.0, 100.0],
+                rotation: 0.0,
+                scale: [1.0, 1.0],
+            },
+            Velocity::zero(),
+        );
+
+        scene.spawn(
+            test_sprite,
+            Transform {
+                position: [500.0, 100.0],
+                rotation: 0.0,
+                scale: [0.75, 0.75],
+            },
+            Velocity::zero(),
+        );
+
+        scene.spawn(
+            renderer.default_sprite(),
+            Transform {
+                position: [300.0, 400.0],
+                rotation: 0.35,
+                scale: [0.5, 0.5],
+            },
+            Velocity::zero(),
+        );
+
+        scene.spawn(
+            renderer.test_sprite(),
+            Transform {
+                position: [700.0, 400.0],
+                rotation: -0.3,
+                scale: [0.5, 0.5],
+            },
+            Velocity::zero(),
+        );
+        
+
         self.renderer = Some(renderer);
+        self.scene = Some(scene);
+        self.player = Some(player);
         self.window = Some(window);
     }
 
@@ -235,6 +296,34 @@ impl<G: Game> ApplicationHandler for App<G> {
                     self.time.delta_seconds(),
                     &self.input,
                 );
+
+                let dt = self.time.delta_seconds();
+
+                if let Some(player) = self.player {
+                if let Some(scene) = &mut self.scene {
+                    if let Some(entity) = scene.get_mut(player) {
+                        entity.velocity.x = 0.0;
+
+                        if self.input.is_action_down(
+                            Action::MoveRight
+                        ) {
+                            entity.velocity.x = 100.0;
+                        }
+
+                        if self.input.is_action_down(
+                            Action::MoveLeft
+                        ) {
+                            entity.velocity.x = -100.0;
+                        }
+                    }
+                }
+            }
+
+                if let Some(scene) = &mut self.scene {
+                    scene.update(
+                        self.time.delta_seconds(),
+                    );
+                }
 
                 // Camera movement.
                 let dt = self.time.delta_seconds();
@@ -350,54 +439,20 @@ impl<G: Game> ApplicationHandler for App<G> {
 
 impl<G: Game> App<G> {
     fn render(&mut self) {
-        if let Some(renderer) = &mut self.renderer {
-            renderer.set_camera_zoom(self.camera_zoom);
+        let Some(renderer) = &mut self.renderer
+        else {
+            return;
+        };
 
-            let sprite = renderer.default_sprite();
-            let test_sprite = renderer.test_sprite();
+        renderer.set_camera_zoom(
+            self.camera_zoom
+        );
 
-            // Texture A
-            renderer.draw_sprite(
-                &sprite,
-                &Transform {
-                    position: [100.0, 100.0],
-                    rotation: 0.0,
-                    scale: [1.0, 1.0],
-                },
-            );
-
-            // Texture B
-            renderer.draw_sprite(
-                &test_sprite,
-                &Transform {
-                    position: [500.0, 100.0],
-                    rotation: 0.0,
-                    scale: [0.75, 0.75],
-                },
-            );
-
-            // Texture A
-            renderer.draw_sprite(
-                &sprite,
-                &Transform {
-                    position: [300.0, 400.0],
-                    rotation: 0.35,
-                    scale: [0.5, 0.5],
-                },
-            );
-
-            // Texture B
-            renderer.draw_sprite(
-                &test_sprite,
-                &Transform {
-                    position: [700.0, 400.0],
-                    rotation: -0.3,
-                    scale: [0.5, 0.5],
-                },
-            );
-
-            renderer.render();
+        if let Some(scene) = &self.scene {
+            scene.render(renderer);
         }
+
+        renderer.render();
 
         self.game.render();
     }

@@ -1,6 +1,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TextureHandle(pub u32);
 
+#[derive(Clone, Copy, Debug)]
 pub struct Sprite {
     pub texture: TextureHandle,
 }
